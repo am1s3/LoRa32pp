@@ -31,49 +31,40 @@ T-LoRa32 V2.1  +  GPS  +  18650 power path  +  bigger OLED  +  fixed DIO1  =  Lo
 
 ---
 
-## Hardware
+## Documentation
 
-### Bill of materials
+- [`BOM.csv`](BOM.csv) — full parts list with sources and prices
+- [`HARDWARE.md`](HARDWARE.md) — wiring tables, power tree, mechanical stack-up, test points
+- [`variants/esp32/lora32pp/variant.h`](variants/esp32/lora32pp/variant.h) — custom firmware variant (Option B)
 
-| # | Component | Part / marking | Qty | Notes |
-|---|---|---|---|---|
-| 1 | MCU board | ESP32-WROOM-32 DevKit V1 (38-pin) | 1 | Must have onboard USB-UART + LDO |
-| 2 | LoRa transceiver | Ai-Thinker Ra-02 (SX1278, 433 MHz) **on breakout** | 1 | Breakout exposes DIO0–DIO5, 2.54 mm pitch |
-| 3 | GNSS | u-blox NEO-6M, GY-GPS6MV2 + IPEX patch antenna | 1 | GPS-only constellation |
-| 4 | Display | OLED 1.3" 128×64, SH1106, I²C | 1 | Address `0x3C` |
-| 5 | Boost converter | MT3608 module **with trimmer** | 1 | Set output to exactly 3.30 V |
-| 6 | Charger | TP4056 **with protection** (DW01 + FS8205A) | 1 | Verify protection ICs are present |
-| 7 | Cell | 18650 Li-Ion, flat-top unprotected | 1 | e.g. EVE 2400 mAh |
-| 8 | Cell holder | 1×18650 SMD holder | 1 | ~77 × 20 × 18 mm |
-| 9 | Load switch | IRF7342TRPBF (dual P-channel, SO-8) | 1 | −55 V, −3.4 A, R<sub>DS(on)</sub> 0.17 Ω @ V<sub>GS</sub>=−4.5 V |
-| 10 | Antenna | 433 MHz 3 dBi whip, RP-SMA + IPX pigtail 15 cm | 1 | 48 mm whip, vertical polarisation |
-| 11 | Power switch | SS12D06 slide switch | 1 | Physically breaks battery rail |
-| 12 | Fuse | 1 A + holder | 1 | Between cell + and everything else |
-| 13 | Perfboard | 60 × 80 mm double-sided, 2.54 mm grid | 3 | Sandwich layers |
-| 14 | Standoffs | M2 × 20 brass | 4 | Layer 1 → 2 gap (cell clearance) |
-| 15 | Standoffs | M2 × 15 nylon | 4 | Layer 2 → 3 gap (DevKit clearance) |
-| 16 | Screws | M2 × 5 ISO 7380-1 | ~12 | |
-| 17 | Headers | PLS + PBS 2.54 mm | 4 rows | Inter-layer connectors + module sockets |
-| 18 | Tactile switches | 6 × 6 × 5 mm | 3 | BOOT, RESET, USER |
-
-#### Passives
-
-| Value | Package | Qty | Purpose |
-|---|---|---|---|
-| 100 kΩ ±1% | axial 0.25 W | 2 | Battery divider (R1 = R2) |
-| 100 kΩ ±1% | axial 0.25 W | 2 | MOSFET gate pull-ups (gate → source) |
-| 10 kΩ | axial 0.25 W | 1 | External pull-up for USER button (GPIO39 has no internal pull) |
-| 100 nF X7R 50 V | ceramic | 8 | Decoupling: AMS/MT input+output, each module VCC, ADC filter |
-| 10 µF 50 V LowESR | electrolytic | 2 | MT3608 input/output bulk |
-| 470 µF 16 V LowESR | electrolytic | 2 | Rail bulk on 3.3 V and battery side |
-
-> ⚠️ **Do not substitute the load switch with an N-channel part** (2N7002, BSS138). An N-FET in the high side needs V<sub>G</sub> > V<sub>S</sub> + V<sub>th</sub> ≈ 5.8 V, which a 3.3 V GPIO cannot produce. It will sit half-open and drop 1.5 V at 45 mA. Use P-channel only.
+The sections below summarise the essentials; the linked files are the source of truth.
 
 ---
 
-## Pinout
+## Hardware summary
 
-Base is the stock `tlora-v2-1-1_6` variant. SPI pins match both that variant and the ESP32 architecture defaults (`LORA_SCK 5`, `LORA_MISO 19`, `LORA_MOSI 27`, `LORA_CS 18`).
+Full bill of materials with quantities, sources and prices lives in [`BOM.csv`](BOM.csv). The headline components:
+
+| # | Component | Part | Qty |
+|---|---|---|---|
+| 1 | MCU board | ESP32-WROOM-32 DevKit V1 (38-pin) | 1 |
+| 2 | LoRa transceiver | Ai-Thinker Ra-02 (SX1278, 433 MHz) on breakout | 1 |
+| 3 | GNSS | u-blox NEO-6M, GY-GPS6MV2 + IPEX patch antenna | 1 |
+| 4 | Display | OLED 1.3" 128×64, SH1106, I²C | 1 |
+| 5 | Boost converter | MT3608 module **with trimmer** | 1 |
+| 6 | Charger | TP4056 **with protection** (DW01 + FS8205A) | 1 |
+| 7 | Cell | 18650 Li-Ion, flat-top unprotected | 1 |
+| 8 | Load switch | IRF7342TRPBF (dual P-channel, SO-8) | 1 |
+| 9 | Antenna | 433 MHz 3 dBi whip, RP-SMA + IPX pigtail 15 cm | 1 |
+| 10 | Perfboard | 60 × 80 mm double-sided, 2.54 mm grid | 3 |
+
+> ⚠️ **Do not substitute the load switch with an N-channel part** (2N7002, BSS138). An N-FET in the high side needs V<sub>G</sub> > V<sub>S</sub> + V<sub>th</sub> ≈ 5.8 V, which a 3.3 V GPIO cannot produce. It will sit half-open and drop ~1.5 V at 45 mA. Use P-channel only. See [`HARDWARE.md`](HARDWARE.md#u7--irf7342-dual-p-fet) for the SO-8 pinout.
+
+---
+
+## Pinout summary
+
+Base is the stock `tlora-v2-1-1_6` variant. SPI pins match both that variant and the ESP32 architecture defaults. Full per-module wiring tables are in [`HARDWARE.md`](HARDWARE.md#module-by-module-wiring).
 
 ### LoRa — Ra-02 / SX1278
 
@@ -88,7 +79,6 @@ Base is the stock `tlora-v2-1-1_6` variant. SPI pins match both that variant and
 | **DIO1** | **33** | `LORA_DIO1` | ✅ **must be wired** |
 | DIO2 | 32 | `LORA_DIO2` | optional, unused on SX127x |
 | 3V3 | 3.3 V rail | — | **never 5 V** |
-| GND | GND | — | |
 
 > `LORA_DIO1` is not cosmetic. The Meshtastic RX readout task is woken by this interrupt. Leaving it unconnected forces polling fallback and costs packets.
 
@@ -98,10 +88,8 @@ Base is the stock `tlora-v2-1-1_6` variant. SPI pins match both that variant and
 |---|---|---|
 | SDA | **21** | `I2C_SDA` |
 | SCL | **22** | `I2C_SCL` |
-| VCC | 3.3 V rail | — |
-| GND | GND | — |
 
-No `RESET_OLED` — this panel has no reset pin broken out. No `VEXT_ENABLE` — display is fed directly from the 3.3 V rail.
+Address `0x3C`. No `RESET_OLED` (panel has no reset pin broken out), no `VEXT_ENABLE` (fed directly from the 3.3 V rail).
 
 ### GNSS — NEO-6M (UART1)
 
@@ -110,13 +98,10 @@ No `RESET_OLED` — this panel has no reset pin broken out. No `VEXT_ENABLE` —
 | **TX** | **13** | `GPS_RX_PIN` | module → ESP32 |
 | **RX** | **14** | `GPS_TX_PIN` | ESP32 → module |
 | VCC | IRF7342 drain | — | switched rail |
-| GND | GND | — | common |
 
 > Naming follows Meshtastic convention: `GPS_RX_PIN` is the pin **the ESP32 receives on**, so it goes to the module's TX. Getting this backwards is the single most common GPS wiring mistake.
 
 ### Load switch — IRF7342 (SO-8, dual P-FET)
-
-Pinout per Infineon datasheet, top view:
 
 ```
         ┌───∪───┐
@@ -133,9 +118,7 @@ Pinout per Infineon datasheet, top view:
 | Gate pull-up | — | 100 kΩ between G1 (2) and S1 (1) |
 | **Channel 2 — spare** | S2 = 3, G2 = 4, D2 = 5+6 | Tie G2 to S2 and to 3.3 V so it never floats |
 
-Gate logic: **LOW = ON**, HIGH = OFF. Hence `GPS_EN_ACTIVE 0`.
-
-The gate pull-up is mandatory. Without it the gate floats during reset/flashing and the receiver randomly power-cycles.
+Gate logic: **LOW = ON**, HIGH = OFF. Hence `GPS_EN_ACTIVE 0`. The gate pull-up is mandatory — without it the gate floats during reset/flashing and the receiver randomly power-cycles.
 
 > Do **not** gate the OLED with channel 2. Meshtastic scans I²C at boot; if the panel is absent on the bus, `screen_found.port == NO_I2C` and the Screen object is never created. You lose the display entirely.
 
@@ -166,9 +149,7 @@ Why 100k/100k and not something else:
 | 100k / 220k | 2.888 V | 1.4545 | ❌ outside ADC linear range (~2.45–2.6 V ceiling) |
 | 220k / 100k | 1.312 V | 3.2 | ⚠️ linear but wastes ADC span |
 
-GPIO35 is input-only with no internal pull resistors — ideal for ADC. **Use ADC1 (GPIO32–39) only.** ADC2 channels are unusable while Wi-Fi is active.
-
-If readings drift, trim `config.power.adc_multiplier_override` from the phone app — no reflash needed.
+GPIO35 is input-only with no internal pull resistors — ideal for ADC. **Use ADC1 (GPIO32–39) only.** ADC2 channels are unusable while Wi-Fi is active. If readings drift, trim `config.power.adc_multiplier_override` from the phone app — no reflash needed.
 
 ### Buttons
 
@@ -198,7 +179,7 @@ If readings drift, trim `config.power.adc_multiplier_override` from the phone ap
 [18650] ──[fuse 1A]──[SS12D06]──┬──> [TP4056 B+/B-]
                                 │
                         [100k/100k + 100nF] ──> GPIO35
-                                
+
 [TP4056 OUT+] ──> [MT3608 IN] ──(trim to 3.30 V)──> 3.3 V RAIL
                                                        │
                                     ┌──────────────────┼──────────────────┐
@@ -207,6 +188,8 @@ If readings drift, trim `config.power.adc_multiplier_override` from the phone ap
                                     │                                     │
                               [OLED VCC]                            [D1] ─┴─> [NEO-6M VCC]
 ```
+
+Full net list and decoupling requirements in [`HARDWARE.md`](HARDWARE.md#power-tree).
 
 ### Key decisions
 
@@ -223,19 +206,6 @@ If readings drift, trim `config.power.adc_multiplier_override` from the phone ap
 
 **Physical disconnect.** SS12D06 breaks the battery rail completely for storage, eliminating converter quiescent draw.
 
-### Decoupling (not optional)
-
-| Location | Components |
-|---|---|
-| MT3608 input | 10 µF + 100 nF |
-| MT3608 output / 3.3 V rail | 470 µF LowESR + 100 nF |
-| Ra-02 VCC, at the pin | 100 nF (+ 10 µF if space) |
-| NEO-6M VCC | 100 nF |
-| OLED VCC | 100 nF |
-| Across divider lower leg | 100 nF |
-
-Skipping per-module decoupling produces brownout resets on every LoRa TX burst — a bug that looks like firmware but is pure layout.
-
 ---
 
 ## Mechanical: three-layer sandwich
@@ -246,13 +216,11 @@ Skipping per-module decoupling produces brownout resets on every LoRa TX burst �
 | **2 — middle** | ESP32 DevKit on headers, MT3608, IRF7342 | 12 mm (DevKit) |
 | **3 — top** | Ra-02 breakout, NEO-6M, OLED, USER button | ~8 mm |
 
-Gaps: **M2 × 20** between layers 1–2 (cell clearance), **M2 × 15** between layers 2–3 (DevKit + wiring clearance).
+Gaps: **M2 × 20** between layers 1–2 (cell clearance), **M2 × 15** between layers 2–3 (DevKit + wiring clearance). Inter-layer wiring uses paired PLS/PBS headers so layers separate like Arduino shields.
 
-Overall envelope: **≈ 80 × 60 × 45 mm**. Only the three buttons and the display protrude; the underside of layer 1 is kept clear.
+Overall envelope target: **≈ 80 × 60 × 45 mm**. Only the three buttons and the display protrude; the underside of layer 1 is kept clear. Mount the GPS patch antenna on the **inside of the top lid**, facing skyward — burying it under another board costs fix time and sensitivity.
 
-Inter-layer wiring uses paired PLS/PBS headers so layers separate like Arduino shields instead of a 15-wire harness. Signals crossing layers: SPI ×7, UART ×2, I²C ×2, gate control ×1, button ×1, power/GND ×2.
-
-> Mount the GPS patch antenna on the **inside of the top lid**, facing skyward. Burying it under another board costs fix time and sensitivity.
+Exact dimensions and test-point locations in [`HARDWARE.md`](HARDWARE.md#mechanical-stack-up).
 
 ---
 
@@ -462,7 +430,7 @@ Honest list, so nobody expects a T-Beam clone:
 
 ## License
 
-Hardware documentation: **CC BY-SA 4.0**.  
+Hardware documentation: **CC BY-SA 4.0**.
 Any firmware variant files derived from Meshtastic inherit **GPL-3.0**.
 
 ---
