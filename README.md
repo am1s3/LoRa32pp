@@ -1,8 +1,9 @@
 # LoRa32++
 
-> DIY Meshtastic node built on the LILYGO T-LoRa32 V2.1 pinout, with GPS, hardware power gating and a serviceable sandwich construction.
+> DIY Meshtastic node built on the LILYGO T-LoRa32 V2.1 pinout, with GPS, dual-source hot-swap power and a serviceable sandwich construction.
 
-**Status:** 🚧 Prototype / documentation stage. Hardware BOM and pinout are finalised, assembly in progress. 3D-printable enclosure coming later.
+**Current version: V1.2**
+**Status:** 🚧 Prototype / documentation stage. Hardware design finalised, assembly in progress. 3D-printable enclosure coming later.
 
 ---
 
@@ -10,63 +11,97 @@
 
 LoRa32++ is not a new PCB design (yet). It is a **hand-soldered node on perfboard**, wired to be pin-compatible with the stock Meshtastic `tlora-v2-1-1_6` firmware target, plus the peripherals that board never had.
 
-The idea: take the well-tested T-LoRa32 schematic base, add everything a T-Beam has, and keep every module socketed so nothing is unrepairable.
+The idea: take the well-tested T-LoRa32 schematic base, add everything a T-Beam has, keep every module socketed so nothing is unrepairable, and make the power system modular.
 
 ```
-T-LoRa32 V2.1  +  GPS  +  18650 power path  +  bigger OLED  +  fixed DIO1  =  LoRa32++
+T-LoRa32 V2.1 + GPS + dual 18650 power path + bigger OLED + fixed DIO1 = LoRa32++
 ```
 
 ### Why "++"
 
-| Improvement | Stock T-LoRa32 V2.1 | LoRa32++ |
+| Improvement | Stock T-LoRa32 V2.1 | LoRa32++ V1.2 |
 |---|---|---|
-| GNSS | ❌ none | ✅ u-blox NEO-6M + patch antenna |
-| Battery | JST connector for flat LiPo only | ✅ 18650 holder + TP4056 charge/protection |
-| Power conversion | direct LiPo / USB | ✅ MT3608 trimmed to 3.3 V, single-stage |
+| GNSS | ❌ none | ✅ ATGM336H (AT6558, multi-constellation) + patch antenna |
+| Battery | JST connector for flat LiPo only | ✅ internal 18650 holder **plus external 1S pack input** |
+| Hot-swap power | ❌ none | ✅ diode-ORing: swap packs without rebooting the node |
+| Power conversion | direct LiPo / USB | ✅ MT3608 trimmed to 3.3 V, single-stage, LC-filtered |
 | Display | 0.96" SSD1306 | ✅ 1.3" SH1106 (more readable area) |
 | `LORA_DIO1` | not routed on early revisions | ✅ wired to GPIO33 from day one |
-| Peripheral power gating | ❌ none | ✅ IRF7342 dual P-MOSFET, firmware-driven |
-| Battery sensing | 100k/100k divider | ✅ same divider + local RC filter on ADC |
+| Battery sensing | 100k/100k divider | ✅ same divider + local RC filter + software averaging |
 | Repairability | SMD, board-level replacement | ✅ every module on headers |
+
+---
+
+## V1.2 changelog
+
+- **Perfboards back to 60 × 80 mm.** The 50 × 70 experiment was too tight: SPI wires ran over components, the GPS patch sat against the Ra-02 shield, and standoff holes weakened the corners. 60 × 80 gives clean routing and a proper diagonal battery bay.
+- **Internal SMD 18650 holder retained**, mounted diagonally corner-to-corner on the bottom board. The two free triangles host the TP4056 and the MT3608 + LC filter.
+- **External battery input added** (JST-PH 2.0, **1S only**). Diode-ORing with the internal cell enables hot-swap: plug a charged pack, the node keeps running, unplug it and the internal cell takes over instantly.
+- **Reverse-polarity and overcurrent protection** on both power paths (Schottky ORing + 1 A fuse).
+- **Removed the dummy-load resistor idea** from earlier drafts: a permanent 10 mA bleed wastes ~25 % of a 3000 mAh cell per day and contradicts the whole point of this build. Ripple is handled by the LC filter and ADC oversampling instead.
+- **BOM.csv removed.** The parts list now lives in this README so the repo stays self-contained.
+
+---
+
+## ⚠️ Power rules (read before plugging anything in)
+
+1. **EXTERNAL INPUT IS 1S ONLY: 3.0 – 4.2 V.**
+   The MT3608 is a **boost** converter. It cannot step down. If you feed it 2S (7.4 V) or a 5 V power bank, the output rail rises toward the input voltage and **every 3.3 V component on the node dies at once**. There is no firmware protection against this. Label your packs.
+2. **Never connect two sources without the ORing diodes fitted.** Direct paralleling of cells at different state-of-charge drives equalisation currents of several amps through perfboard wiring. The diodes are not optional.
+3. **Always attach the antenna before transmitting.** TX into an open connector reflects power into the SX1278 PA and degrades it permanently.
+4. **Fit the 1 A fuse.** A 18650 delivers 15–20 A into a short; TP4056 protection trips around 3 A, which is above what thin perfboard wiring survives.
+
+---
+
+## Bill of materials (V1.2)
+
+Prices are approximate street prices in UAH at the time of writing. Anything marked "owned" assumes you already have the basic maker stash.
+
+| # | Component | Part / spec | Qty | ~Price |
+|---|---|---|---|---|
+| 1 | MCU board | ESP32-WROOM-32 DevKit V1 (38-pin) | 1 | owned / 150 ₴ |
+| 2 | LoRa transceiver | Ai-Thinker Ra-02 (SX1278, 433 MHz), **full-pin breakout with DIO1** | 1 | 298 ₴ |
+| 3 | GNSS | ATGM336H (AT6558) + IPEX patch antenna | 1 | 338 ₴ |
+| 4 | Display | OLED 1.3" 128×64, SH1106, I²C | 1 | owned / 100 ₴ |
+| 5 | Boost converter | MT3608 module **with trimmer** | 1 | owned / 40 ₴ |
+| 6 | Charger | TP4056 **with protection** (DW01 + FS8205A) | 1 | owned / 30 ₴ |
+| 7 | Internal cell | 18650 Li-Ion, flat-top unprotected | 1 | 150–250 ₴ |
+| 8 | Cell holder | 18650 SMD holder, wired to perfboard | 1 | 19 ₴ |
+| 9 | External input | JST-PH 2.0 female (board) + male pigtails | 1+2 | ~13 ₴ |
+| 10 | ORing diodes | Schottky **SS14** (1 A, 40 V, SMA/DO-214AC) | 2 | ~6 ₴ |
+| 11 | Fuse | 1 A fast + holder (or PPTO resettable 1.1 A) | 1 | ~5 ₴ |
+| 12 | Power switch | SS12D06 slide switch | 1 | 11 ₴ |
+| 13 | Antenna | 433 MHz whip, RP-SMA + IPEX pigtail 15 cm | 1 | 59 ₴ |
+| 14 | LC filter | 10 µH inductor (≥0.5 A) + 22 µF X7R + 100 nF X7R | 1 set | ~5 ₴ |
+| 15 | Bulk caps | 470 µF 16 V low-ESR electrolytic | 2 | ~4 ₴ |
+| 16 | Divider / pull-ups | 100 kΩ ×2 (ADC), 10 kΩ ×1 (button) | 3 | ~2 ₴ |
+| 17 | ADC filter cap | 100 nF X7R | 1 | ~1 ₴ |
+| 18 | Buttons | tactile DIP 6×6 mm (USER; RESET/BOOT onboard) | 1 | ~2 ₴ |
+| 19 | Perfboard | 60 × 80 mm double-sided, 2.54 mm grid | 3 | 87 ₴ |
+| 20 | Stack hardware | M2 standoffs 20 mm + 15 mm, screws | 8+8 | ~40 ₴ |
+| 21 | Interconnect | header pairs PLS/PBS, Dupont set, hookup wire | 1 set | ~35 ₴ |
+
+**Total new spend (assuming owned stash): ≈ 950–1000 ₴.**
+For comparison: a factory T-Beam V1.1 costs ≈ 1600 ₴ and has neither hot-swap power nor a modern GNSS.
+
+> Do **not** substitute the ORing Schottkys with ordinary silicon diodes (1N400x): 0.7–1.0 V forward drop starves the boost converter at low cell voltage. Do **not** use high-leakage big Schottkys (SS34-class) on the battery path if you care about deep-sleep current; SS14-class leakage is an order of magnitude lower.
 
 ---
 
 ## Documentation
 
-- [`BOM.csv`](BOM.csv) — full parts list with sources and prices
-- [`HARDWARE.md`](HARDWARE.md) — wiring tables, power tree, mechanical stack-up, test points
-- [`variants/esp32/lora32pp/variant.h`](variants/esp32/lora32pp/variant.h) — custom firmware variant (Option B)
+- [`HARDWARE.md`](HARDWARE.md) — wiring tables, power tree, mechanical stack-up, bring-up checklist, test points. **Source of truth for assembly.**
+- [`variants/esp32/lora32pp/variant.h`](variants/esp32/lora32pp/variant.h) — custom firmware variant (Option B).
 
-The sections below summarise the essentials; the linked files are the source of truth.
+The sections below summarise the essentials; the linked files win if there is ever a conflict.
 
 ---
 
 ## Hardware summary
 
-Full bill of materials with quantities, sources and prices lives in [`BOM.csv`](BOM.csv). The headline components:
+### Pinout (base = stock `tlora-v2-1-1_6`)
 
-| # | Component | Part | Qty |
-|---|---|---|---|
-| 1 | MCU board | ESP32-WROOM-32 DevKit V1 (38-pin) | 1 |
-| 2 | LoRa transceiver | Ai-Thinker Ra-02 (SX1278, 433 MHz) on breakout | 1 |
-| 3 | GNSS | u-blox NEO-6M, GY-GPS6MV2 + IPEX patch antenna | 1 |
-| 4 | Display | OLED 1.3" 128×64, SH1106, I²C | 1 |
-| 5 | Boost converter | MT3608 module **with trimmer** | 1 |
-| 6 | Charger | TP4056 **with protection** (DW01 + FS8205A) | 1 |
-| 7 | Cell | 18650 Li-Ion, flat-top unprotected | 1 |
-| 8 | Load switch | IRF7342TRPBF (dual P-channel, SO-8) | 1 |
-| 9 | Antenna | 433 MHz 3 dBi whip, RP-SMA + IPX pigtail 15 cm | 1 |
-| 10 | Perfboard | 60 × 80 mm double-sided, 2.54 mm grid | 3 |
-
-> ⚠️ **Do not substitute the load switch with an N-channel part** (2N7002, BSS138). An N-FET in the high side needs V<sub>G</sub> > V<sub>S</sub> + V<sub>th</sub> ≈ 5.8 V, which a 3.3 V GPIO cannot produce. It will sit half-open and drop ~1.5 V at 45 mA. Use P-channel only. See [`HARDWARE.md`](HARDWARE.md#u7--irf7342-dual-p-fet) for the SO-8 pinout.
-
----
-
-## Pinout summary
-
-Base is the stock `tlora-v2-1-1_6` variant. SPI pins match both that variant and the ESP32 architecture defaults. Full per-module wiring tables are in [`HARDWARE.md`](HARDWARE.md#module-by-module-wiring).
-
-### LoRa — Ra-02 / SX1278
+#### LoRa — Ra-02 / SX1278
 
 | Module pin | ESP32 GPIO | Define | Required |
 |---|---|---|---|
@@ -77,150 +112,133 @@ Base is the stock `tlora-v2-1-1_6` variant. SPI pins match both that variant and
 | RST | **23** | `LORA_RESET` | ✅ |
 | DIO0 | **26** | `LORA_DIO0` | ✅ primary IRQ |
 | **DIO1** | **33** | `LORA_DIO1` | ✅ **must be wired** |
-| DIO2 | 32 | `LORA_DIO2` | optional, unused on SX127x |
+| DIO2 | 32 | `LORA_DIO2` | optional |
 | 3V3 | 3.3 V rail | — | **never 5 V** |
 
-> `LORA_DIO1` is not cosmetic. The Meshtastic RX readout task is woken by this interrupt. Leaving it unconnected forces polling fallback and costs packets.
+> `LORA_DIO1` is not cosmetic. The Meshtastic RX task is woken by this interrupt. Leaving it unconnected forces polling fallback and costs packets. Buy the **full-pin** Ra-02 breakout; 8-pin variants without DIO1 are a trap.
 
-### Display — OLED SH1106 (I²C)
+#### Display — OLED SH1106 (I²C)
 
-| Module pin | ESP32 GPIO | Define |
+| Module pin | ESP32 GPIO |
+|---|---|
+| SDA | **21** |
+| SCL | **22** |
+
+Address `0x3C`. No reset pin, no `VEXT_ENABLE`.
+
+#### GNSS — ATGM336H (UART)
+
+| Module pin | ESP32 GPIO | Direction |
 |---|---|---|
-| SDA | **21** | `I2C_SDA` |
-| SCL | **22** | `I2C_SCL` |
-
-Address `0x3C`. No `RESET_OLED` (panel has no reset pin broken out), no `VEXT_ENABLE` (fed directly from the 3.3 V rail).
-
-### GNSS — NEO-6M (UART1)
-
-| Module pin | ESP32 GPIO | Define | Direction |
-|---|---|---|---|
-| **TX** | **13** | `GPS_RX_PIN` | module → ESP32 |
-| **RX** | **14** | `GPS_TX_PIN` | ESP32 → module |
-| VCC | IRF7342 drain | — | switched rail |
+| **TX** | **13** (`GPS_RX_PIN`) | module → ESP32 |
+| **RX** | **14** (`GPS_TX_PIN`) | ESP32 → module |
+| VCC | 3.3 V rail | see note below |
+| PPS | spare pad | optional, not used by default |
 
 > Naming follows Meshtastic convention: `GPS_RX_PIN` is the pin **the ESP32 receives on**, so it goes to the module's TX. Getting this backwards is the single most common GPS wiring mistake.
 
-### Load switch — IRF7342 (SO-8, dual P-FET)
+> **GNSS supply note:** the ATGM336H breakout carries an onboard LDO and is marketed as "5 V". The AT6558 die itself runs at ~3.3 V. Feeding the breakout 3.3 V puts the LDO in dropout; the die then sees ≈ 3.0–3.2 V, which is inside its operating range but with little margin. **Verify before assembly:** power the module at 5.0 V, find the node that reads ≈ 3.3 V (LDO output), then drop the input to 3.30 V and re-measure that node. ≥ 3.0 V → run as designed. 2.8–3.0 V → trim the rail to 3.40–3.45 V (still safe for ESP32/SX1278/SH1106). < 2.8 V → bypass the breakout LDO with a solder jumper from VCC pad to LDO output (acceptable on a single regulated rail) or pick a 3.3 V-native GNSS module. Full procedure in HARDWARE.md.
+
+#### Battery sensing
 
 ```
-        ┌───∪───┐
-  S1 ──1│       │8── D1
-  G1 ──2│IRF7342│7── D1
-  S2 ──3│       │6── D2
-  G2 ──4│       │5── D2
-        └───────┘
-```
-
-| Function | Pins | Connection |
-|---|---|---|
-| **Channel 1 — GPS rail** | S1 = 1, G1 = 2, D1 = 7+8 | S1 → 3.3 V, G1 → GPIO15, D1 → NEO-6M VCC |
-| Gate pull-up | — | 100 kΩ between G1 (2) and S1 (1) |
-| **Channel 2 — spare** | S2 = 3, G2 = 4, D2 = 5+6 | Tie G2 to S2 and to 3.3 V so it never floats |
-
-Gate logic: **LOW = ON**, HIGH = OFF. Hence `GPS_EN_ACTIVE 0`. The gate pull-up is mandatory — without it the gate floats during reset/flashing and the receiver randomly power-cycles.
-
-> Do **not** gate the OLED with channel 2. Meshtastic scans I²C at boot; if the panel is absent on the bus, `screen_found.port == NO_I2C` and the Screen object is never created. You lose the display entirely.
-
-### Battery sensing
-
-```
-BAT+ ──[ 100k ]──┬── GPIO35 (ADC1_CH7)
-                 │
-              [ 100k ]   [ 100nF ]
-                 │          │
-                GND ───────GND
+BAT+ (after ORing, before switch) ──[100k]──┬── GPIO35 (ADC1_CH7)
+                                            │
+                                         [100k]  [100nF]
+                                            │       │
+                                           GND ────GND
 ```
 
 | Parameter | Value |
 |---|---|
 | `BATTERY_PIN` | 35 |
-| `ADC_CHANNEL` | `ADC_CHANNEL_7` |
-| `ADC_MULTIPLIER` | **2.0** |
-| `BATTERY_SENSE_SAMPLES` | 30 |
-| Divider current @ 4.2 V | 21 µA |
-| ADC voltage @ 4.2 V | **2.100 V** — inside the linear region |
+| `ADC_MULTIPLIER` | 2.0 |
+| `BATTERY_SENSE_SAMPLES` | 64 |
 
-Why 100k/100k and not something else:
+GPIO35 is input-only, no internal pulls — ideal for ADC. **ADC1 only** (GPIO32–39); ADC2 is unusable while Wi-Fi is active. The 100 nF at the ADC pin plus 64-sample averaging absorbs MT3608 ripple; no dummy load required.
 
-| R1 / R2 | V<sub>ADC</sub> @ 4.2 V | Multiplier | Verdict |
-|---|---|---|---|
-| **100k / 100k** | **2.100 V** | **2.0** | ✅ matches stock variant, no calibration |
-| 100k / 220k | 2.888 V | 1.4545 | ❌ outside ADC linear range (~2.45–2.6 V ceiling) |
-| 220k / 100k | 1.312 V | 3.2 | ⚠️ linear but wastes ADC span |
+#### Buttons
 
-GPIO35 is input-only with no internal pull resistors — ideal for ADC. **Use ADC1 (GPIO32–39) only.** ADC2 channels are unusable while Wi-Fi is active. If readings drift, trim `config.power.adc_multiplier_override` from the phone app — no reflash needed.
-
-### Buttons
-
-| Button | ESP32 GPIO | Wiring |
+| Button | GPIO | Wiring |
 |---|---|---|
-| BOOT | 0 | onboard, or external switch to GND |
-| RESET | EN | onboard, or external switch to GND |
+| BOOT | 0 | onboard |
+| RESET | EN | onboard |
 | **USER** | **39** | switch to GND + **external 10 kΩ pull-up to 3.3 V** |
 
-> GPIO34–39 have **no internal pull-ups**. `BUTTON_NEED_PULLUP` alone will not work on GPIO39 — the external resistor is required. If you prefer an internal-pull pin, use GPIO0 (`BUTTON_PIN 0` + `BUTTON_NEED_PULLUP`) as T-LoRa V1 does, accepting that BOOT doubles as USER.
+GPIO34–39 have no internal pull-ups; the external resistor is mandatory.
 
-### Reserved / do not touch
+#### Reserved / do not touch
 
 | GPIO | Reason |
 |---|---|
 | 6–11 | SPI flash — using these bricks the board |
-| 12 | Strapping (MTDI). HIGH at boot → VDD_SDIO = 1.8 V → flash won't start |
-| 2 | Strapping. Must be LOW/floating during flashing |
-| 25 | `LED_POWER` in stock variant (DevKit LED) |
-| 34, 36 | Free, input-only, available for future ADC/sensors |
+| 12 | Strapping (MTDI); HIGH at boot → 1.8 V flash → no start |
+| 2 | Strapping; must be LOW/floating during flashing |
+| 34, 36 | Free, input-only, available for future sensors |
 
 ---
 
-## Power architecture
+## Power architecture (V1.2)
 
 ```
-[18650] ──[fuse 1A]──[SS12D06]──┬──> [TP4056 B+/B-]
-                                │
-                        [100k/100k + 100nF] ──> GPIO35
-
-[TP4056 OUT+] ──> [MT3608 IN] ──(trim to 3.30 V)──> 3.3 V RAIL
+[internal 18650] ──[SS14 #1]──┐
+                              ├──[FUSE 1A]──[SS12D06]──┬──[TP4056 B+/B-]*
+[external JST 1S] ──[SS14 #2]──┘                        │
+                                                       ├──[100k/100k + 100nF]── GPIO35
                                                        │
-                                    ┌──────────────────┼──────────────────┐
-                                    │                  │                  │
-                              [ESP32 3V3]         [Ra-02 VCC]      [IRF7342 S1]
-                                    │                                     │
-                              [OLED VCC]                            [D1] ─┴─> [NEO-6M VCC]
+                                                  [MT3608 IN]
+                                                       │ trim 3.30 V
+                                                       ▼
+                                              [10µH]──┬── 3.3 V RAIL
+                                                      │
+                                                 [22µF]+[100nF]+[470µF]
+                                                      │
+                          ┌───────────┬───────────────┼──────────────┐
+                          │           │               │              │
+                    [ESP32 3V3]  [Ra-02 VCC]     [OLED VCC]    [ATGM336H VCC]
 ```
 
-Full net list and decoupling requirements in [`HARDWARE.md`](HARDWARE.md#power-tree).
+\* TP4056 sits **before the ORing diodes**, directly across the internal holder, so USB charging only ever charges the internal cell. The external pack is isolated from the charger by its own diode. Charge external packs with their own charger.
 
 ### Key decisions
 
-**Single-stage conversion.** MT3608 is trimmed to **3.30 V**, not 5 V. The external AMS1117 is removed entirely. This avoids the two-stage penalty:
+- **Single-stage conversion.** MT3608 trimmed to **3.30 V**, not 5 V. No second LDO in the main path. Two-stage (5 V → AMS1117 → 3.3 V) would cost ≈ 40 % of the energy; direct 3.3 V keeps ≈ 90 %.
+- **Full cell utilisation.** MT3608 operates down to ~2 V input, so the cell drains to the TP4056 cutoff instead of stalling at 3.8 V behind an LDO.
+- **Hot-swap via ORing.** The higher-voltage source wins; the other diode is reverse-biased. Unplugging the external pack transfers load to the internal cell with zero interruption. This is a poor-man's UPS.
+- **DevKit powered through its 3V3 pin**, not VIN. The onboard AMS1117 needs ≥ 4.5 V at VIN to regulate; at 3.3 V rail it would output ~2.2 V and brown out the ESP32. Feeding the 3V3 pin bypasses it entirely. USB flashing still works normally with the battery rail switched off.
+- **Physical disconnect.** SS12D06 breaks the rail completely for storage.
 
-| Path | Efficiency |
+### Realistic autonomy (honest numbers)
+
+Assumptions: 3000 mAh cell, CLIENT_MUTE role, LONG_FAST preset, screen 10 s, GPS fix hourly, BLE off when idle, power saving on.
+
+| Item | Average contribution |
 |---|---|
-| MT3608 → 5 V → AMS1117 → 3.3 V | 0.90 × 0.66 = **59 %** |
-| MT3608 → 3.3 V direct | **~90 %** |
+| ESP32 deep sleep + RTC + radio wake cycles | ~0.5–1.5 mA |
+| GNSS active fixes (≈ 30 s/h × 25 mA) | ~0.2 mA |
+| MT3608 quiescent + feedback divider | ~1–2 mA |
+| TP4056 + DW01 quiescent | ~0.01 mA |
+| SS14 reverse leakage (room temp) | ~0.02–0.1 mA |
+| DevKit USB-UART chip idle (price of convenient flashing) | ~1–3 mA |
+| **Total average** | **≈ 3–7 mA** |
 
-**Full cell utilisation.** MT3608 operates down to ~2 V input, so the cell is drained to the TP4056 cutoff at 3.0 V instead of stalling at 3.8 V. That recovers roughly 68 % more usable capacity compared to feeding a 1.1 V-dropout LDO directly.
-
-**Flashing stays trivial.** Plug USB → the laptop supplies 5 V on `VIN`, the DevKit's own LDO and USB-UART chip run normally, flash over the onboard port. Unplug → the node runs from the trimmed 3.3 V rail. Nothing needs desoldering.
-
-**Physical disconnect.** SS12D06 breaks the battery rail completely for storage, eliminating converter quiescent draw.
+**3000 mAh / 5 mA ≈ 25 days per charge.** With a 9000 mAh external 1S pack: ≈ 2–3 months. Self-discharge of the cell itself (~2–3 %/month) becomes relevant only beyond that horizon. Earlier claims of "years of runtime" were nonsense and have been removed; the DevKit's always-on USB-UART and the boost converter's quiescent current set the real floor. If you need months on one internal cell, move to a bare WROOM module (removes the UART overhead) — that is a V2.0 topic.
 
 ---
 
-## Mechanical: three-layer sandwich
+## Mechanical: three-layer sandwich (60 × 80 mm)
 
 | Layer | Contents | Height budget |
 |---|---|---|
-| **1 — bottom** | 18650 holder, TP4056, fuse, slide switch | 18 mm (cell) |
-| **2 — middle** | ESP32 DevKit on headers, MT3608, IRF7342 | 12 mm (DevKit) |
-| **3 — top** | Ra-02 breakout, NEO-6M, OLED, USER button | ~8 mm |
+| **1 — bottom** | 18650 holder **diagonal corner-to-corner**, TP4056 in one free triangle, MT3608 + LC filter in the other, fuse, slide switch, JST external input on the edge | 18 mm (cell) |
+| **2 — middle** | ESP32 DevKit on headers, USER button | 12 mm |
+| **3 — top** | Ra-02 breakout, ATGM336H, OLED, antenna pigtail anchored at the edge | ~8 mm |
 
-Gaps: **M2 × 20** between layers 1–2 (cell clearance), **M2 × 15** between layers 2–3 (DevKit + wiring clearance). Inter-layer wiring uses paired PLS/PBS headers so layers separate like Arduino shields.
+Diagonal math: board diagonal = √(60² + 80²) = **100 mm**; holder + cell ≈ 78 mm fits with > 20 mm spare, contacts landing near opposite corners where the charger and converter live. Secure the cell with a hook-and-loop strap or two dabs of hot glue at the holder ends (never on contacts).
 
-Overall envelope target: **≈ 80 × 60 × 45 mm**. Only the three buttons and the display protrude; the underside of layer 1 is kept clear. Mount the GPS patch antenna on the **inside of the top lid**, facing skyward — burying it under another board costs fix time and sensitivity.
+Gaps: **M2 × 20** between layers 1–2, **M2 × 15** between layers 2–3. Inter-layer wiring uses paired PLS/PBS headers so layers separate like shields. Overall envelope ≈ **80 × 60 × 45 mm**. Mount the GPS patch on the top layer facing skyward; keep it clear of the Ra-02 shield can.
 
-Exact dimensions and test-point locations in [`HARDWARE.md`](HARDWARE.md#mechanical-stack-up).
+Open-frame operation is fine for bench/indoor use: insulate the underside (cardboard/kapton/feet), strain-relieve the antenna pigtail with a hot-glue cone at the board edge, and keep the node away from conductive debris. Enclosure is a later step, after the electronics has proven itself for a week.
 
 ---
 
@@ -228,9 +246,7 @@ Exact dimensions and test-point locations in [`HARDWARE.md`](HARDWARE.md#mechani
 
 ### Option A — stock target (recommended first boot)
 
-Flash `tlora-v2-1-1_6` (or `tlora-v2-1-1_8`) from the [Meshtastic Web Flasher](https://flasher.meshtastic.org). Radio, display, battery sensing and buttons work immediately because the pinout matches.
-
-Then enable GPS from the phone app or CLI:
+Flash `tlora-v2-1-1_6` from the Meshtastic Web Flasher. Radio, display, battery sensing and buttons work immediately because the pinout matches. Then enable GPS:
 
 ```bash
 meshtastic --set position.gps_mode ENABLED
@@ -239,104 +255,28 @@ meshtastic --set position.tx_gpio 14
 meshtastic --set position.gps_update_interval 3600
 ```
 
-In this mode GPS power is **not** gated — the receiver stays powered.
+### Option B — custom variant
 
-### Option B — custom variant (enables hardware gating)
-
-Copy an existing variant and add the GPS/gating defines. Per Meshtastic policy, DIY hardware must use `PRIVATE_HW`; it will not appear in the Web Flasher and you maintain it yourself.
-
-`variants/esp32/lora32pp/platformio.ini`:
-
-```ini
-[env:lora32pp]
-extends = esp32_base
-board = esp32doit-devkit-v1
-board_level = extra
-monitor_filters = esp32_exception_decoder
-
-build_flags =
-  ${esp32_base.build_flags}
-  -D PRIVATE_HW
-  -D LORA32PP
-  -I variants/esp32/lora32pp
-
-lib_deps =
-  ${esp32_base.lib_deps}
-
-upload_speed = 921600
-```
-
-`variants/esp32/lora32pp/variant.h`:
-
-```c
-#pragma once
-
-// ---- Display -------------------------------------------------------------
-#define I2C_SDA 21
-#define I2C_SCL 22
-#define USE_SH1106          // comment out to let AutoOLEDWire probe
-
-// ---- User button (input-only pin: external 10k pull-up required) ---------
-#define BUTTON_PIN 39
-
-// ---- Battery sense -------------------------------------------------------
-#define BATTERY_PIN 35
-#define ADC_CHANNEL ADC_CHANNEL_7
-#define ADC_MULTIPLIER 2.0
-#define BATTERY_SENSE_SAMPLES 30
-
-// ---- GNSS ----------------------------------------------------------------
-#define HAS_GPS 1
-#define GPS_RX_PIN 13       // ESP32 receives  <- module TX
-#define GPS_TX_PIN 14       // ESP32 transmits -> module RX
-#define GPS_UBLOX
-#define GPS_BAUDRATE 9600
-
-#define PIN_GPS_EN 15       // IRF7342 channel 1 gate
-#define GPS_EN_ACTIVE 0     // P-FET: LOW = powered
-
-// ---- LoRa (explicit, so upstream default changes can't break us) ---------
-#define USE_RF95
-#undef LORA_SCK
-#define LORA_SCK 5
-#undef LORA_MISO
-#define LORA_MISO 19
-#undef LORA_MOSI
-#define LORA_MOSI 27
-#undef LORA_CS
-#define LORA_CS 18
-#define LORA_RESET 23
-#define LORA_DIO0 26
-#define LORA_DIO1 33        // MUST be physically wired
-#define LORA_DIO2 32
-
-// SX1278 PA_BOOST accepts 2..17 dBm or exactly 20; 18/19 are coerced to 17.
-#define RF95_MAX_POWER 17
-
-// ---- Misc ----------------------------------------------------------------
-#define LED_POWER 2
-```
-
-Build:
+Copy the files from `variants/esp32/lora32pp/` into a Meshtastic firmware checkout and build:
 
 ```bash
 git clone https://github.com/meshtastic/firmware.git
 cd firmware
 git submodule update --init
-mkdir -p variants/esp32/lora32pp   # drop the two files here
+mkdir -p variants/esp32/lora32pp   # drop variant.h + platformio.ini here
 pio run --environment lora32pp
 pio run --environment lora32pp --target upload
 pio device monitor
 ```
+
+Per Meshtastic policy, DIY hardware uses `PRIVATE_HW`; it will not appear in the Web Flasher and you maintain it yourself.
 
 Expected boot log:
 
 ```
 RF95 init result 0
 Frequency set to 433.xxx
-Power output set to 10
 SH1106 found at address 0x3C
-U-blox 6 detected
 Use analog input 35 for battery level
 ```
 
@@ -346,75 +286,70 @@ Use analog input 35 for battery level
 
 ## Configuration
 
-Region **UA_433** is defined in firmware as 433.0–434.7 MHz, **10 % duty cycle, 10 dBm limit**. The regulatory clamp is applied automatically; `isTxAllowedAirUtil()` additionally throttles TX at half the regional allowance.
-
-Suggested settings for a low-traffic personal node:
+Region **UA_433**: 433.0–434.7 MHz, 10 % duty cycle, 10 dBm limit. The regulatory clamp is applied automatically.
 
 | Setting | Value | Why |
 |---|---|---|
 | Region | `UA_433` | local band |
-| Modem preset | `LONG_FAST` | SF11/BW250, ~330 ms per 20-byte packet |
+| Modem preset | `LONG_FAST` | good range/airtime trade-off |
 | Role | `CLIENT` / `CLIENT_MUTE` | no rebroadcast load |
 | TX power | 10 dBm | region clamps anyway |
 | Override duty cycle | `false` | stay legal |
-| `position.gps_update_interval` | 3600 s | one cold fix per hour |
-| `position.gps_mode` | `ENABLED` | gating handled by firmware |
+| `position.gps_update_interval` | 3600 s | one fix per hour |
 | `display.screen_on_secs` | 10 | panel is a real consumer |
 | `power.is_power_saving` | `true` | |
 | Bluetooth | off when not configuring | |
 | `power.adc_multiplier_override` | 0 | only set if voltage reads wrong |
 
-At `LONG_FAST` a 20-byte frame occupies ~330 ms of airtime; the effective 5 % throttle allows roughly 545 packets/hour — far more than a personal node needs.
-
 ---
 
 ## Bring-up checklist
 
-1. **Trim MT3608 before connecting anything.** Feed 5–7 V in, measure `VOUT`, adjust the trimmer to **3.30 ± 0.05 V**. Then load it (~100 mA) and confirm it holds. Never connect a 5 V-configured module to this rail.
-2. **Verify TP4056 has protection.** Look for DW01 + FS8205A next to the main IC. A bare TP4056 has no over-discharge cutoff.
-3. **Continuity-check the antenna.** Centre conductor end-to-end should be near 0 Ω; centre-to-shell must be open. Some batches ship with the centre pin flooded with solder.
-4. **Check IRF7342 orientation.** Source to 3.3 V, drain to load. Reversed, the body diode conducts permanently and GPS never turns off.
-5. **Confirm gate pull-ups fitted** (100 kΩ gate→source on both channels; tie unused G2 to S2).
-6. **Seat U.FL straight down until it clicks.** Rated for ~30 mating cycles; angled force lifts the pad.
-7. **Always attach the antenna before transmitting.**
+1. **Trim MT3608 before connecting anything.** Feed 5–7 V in, adjust to **3.30 ± 0.05 V**, load it (~100 mA) and confirm it holds. Never connect a 5 V-configured module to this rail.
+2. **Verify TP4056 has protection** (DW01 + FS8205A next to the main IC).
+3. **Verify ORing diode orientation** on both paths: anode to source, cathodes joined toward the fuse. Reversed, the body conducts backwards and the "protection" is a short.
+4. **Continuity-check the antenna pigtail**: centre end-to-end ≈ 0 Ω, centre-to-shell open.
+5. **GNSS LDO dropout test** (see HARDWARE.md) before committing the rail voltage.
+6. **Seat U.FL straight down until it clicks.** Rated ~30 mating cycles.
+7. **Antenna attached before any TX.**
 8. First flash over USB with the battery rail switched off.
+9. Hot-swap test: run on internal cell, plug a charged external pack, confirm no reboot; unplug, confirm no reboot.
 
 ---
 
 ## Known limitations
 
-Honest list, so nobody expects a T-Beam clone:
-
-- **Size.** ≈ 216 cm³ vs 66 cm³ for a T-Beam v1.2. Three perfboards plus a cylindrical cell cannot match a multilayer factory PCB. Footprint is about half an iPhone's, thickness about five times.
-- **Efficiency ceiling.** ~90 % single-stage is good, but there is no PMIC. No per-rail telemetry, no coulomb counting, no programmable charge current, no NTC thermal guard.
-- **USB-UART overhead.** The DevKit's CP2102/CH340 sits on the rail and draws current whenever the node is powered. A factory board gates it; here it is the price of convenient flashing.
-- **GNSS.** NEO-6M is GPS-only, ~45 mA during acquisition, ~26 s cold start. NEO-M8N / MAX-M10S are faster, more sensitive and lighter on the battery.
+- **Size.** ≈ 216 cm³ vs 66 cm³ for a T-Beam v1.2. Three perfboards plus a cylindrical cell cannot match a multilayer factory PCB.
+- **No PMIC.** No per-rail telemetry, no coulomb counting, no programmable charge current, no NTC thermal guard. Battery % is voltage-derived (±10–15 %).
+- **USB-UART overhead.** The DevKit's CP2102/CH340 draws current whenever powered. Factory boards gate it; here it is the price of convenient flashing and the main floor on sleep current.
+- **Boost-only external input.** 1S packs only. A buck-boost front end would allow 2S–4S but costs efficiency, money and complexity; deliberately out of scope for V1.2.
 - **No TCXO** on Ra-02 — reference frequency drifts with temperature, which matters at narrow bandwidths.
-- **Not in the Web Flasher** if you use the custom variant. `PRIVATE_HW` builds are community-maintained by design.
+- **Not in the Web Flasher** if you use the custom variant.
 
 ---
 
 ## Roadmap
 
-- [x] Component selection and BOM
-- [x] Pinout compatible with stock `tlora-v2-1-1_6`
-- [x] Power path design (single-stage 3.3 V, full cell utilisation)
-- [x] Hardware GPS gating via IRF7342
+- [x] Component selection and pinout compatible with stock `tlora-v2-1-1_6`
+- [x] Single-stage 3.3 V power path, full cell utilisation
+- [x] V1.2: 60 × 80 mm boards, diagonal internal holder
+- [x] V1.2: external 1S input with Schottky ORing, fuse, hot-swap
 - [ ] Perfboard assembly and bring-up
 - [ ] Measured current profiles per role/interval
-- [ ] 3D-printable enclosure (STEP + STL)
+- [ ] Enclosure (3D-printed or repurposed IP-rated box) + bulkhead antenna mount
 - [ ] Assembly photos and wiring diagram
 - [ ] Second node (headless relay: ESP32 + Ra-02, no GPS/display)
-- [ ] **v2.0:** single custom PCB in KiCad, SMD, TPS63020 or AXP-class PMIC, USB-C, SX1262 + MAX-M10S
+- [ ] **v2.0:** single custom PCB in KiCad, SMD, buck-boost PMIC (TPS63020-class), USB-C, SX1262 + TCXO, MAX-M10S, bare WROOM module to kill UART overhead
 
 ---
 
 ## Safety and legality
 
-- A 18650 cell delivers 15–20 A into a short. **Fit the fuse.** TP4056 protection trips around 3 A, which is above what thin perfboard wiring survives.
+- A 18650 cell delivers 15–20 A into a short. **Fit the fuse.**
 - Never transmit without an antenna attached.
-- Observe your regional band plan. `UA_433` limits ERP to 10 mW with a 10 % duty cycle; firmware enforces this unless you explicitly override it. Overriding is on you.
-- Li-Ion cells hate heat. Do not charge above 1 A on a bare TP4056 without heatsinking, and never charge a swollen or damaged cell.
+- Observe your regional band plan. `UA_433` limits ERP to 10 mW with 10 % duty cycle; firmware enforces this unless you explicitly override it. Overriding is on you.
+- Li-Ion cells hate heat. Do not charge above 1 A on a bare TP4056 without heatsinking; never charge a swollen or damaged cell.
+- External packs: **1S only**, correct polarity, fused. Label every pack you build.
 
 ---
 
@@ -423,7 +358,7 @@ Honest list, so nobody expects a T-Beam clone:
 - [Meshtastic firmware](https://github.com/meshtastic/firmware) — variant sources, `architecture.h` defaults
 - [Meshtastic build docs](https://meshtastic.org/docs/development/firmware/build/) — custom hardware / `PRIVATE_HW` policy
 - [LILYGO T3 / LoRa32 pin mapping](https://wiki.lilygo.cc/products/t3-series/t3-lora32/)
-- [IRF7342 datasheet (Infineon)](https://www.infineon.com/assets/row/public/documents/non-assigned/49/irf7342pbf-1.pdf)
+- [AT6558 / ATGM336H datasheets](https://www.icofchina.com/) — GNSS electrical characteristics
 - [SMA vs RP-SMA connector guide](https://en.wikipedia.org/wiki/SMA_connector)
 
 ---
@@ -438,3 +373,279 @@ Any firmware variant files derived from Meshtastic inherit **GPL-3.0**.
 ## Contributing
 
 Built something on this pinout? Found a mistake in the tables? Open an issue or PR — especially with measured current draw, real-world range figures, or enclosure designs. Corrections backed by a multimeter beat corrections backed by opinion.
+```
+
+---
+
+## Файл 2: `HARDWARE.md` (полностью)
+
+```markdown
+# LoRa32++ V1.2 — Hardware Reference
+
+Source of truth for assembly. If README and this file disagree, this file wins.
+All voltages DC unless stated. All prices UAH, approximate.
+
+---
+
+## 1. Power tree
+
+### 1.1 Net list
+
+| Net | From | To | Notes |
+|---|---|---|---|
+| CELL_INT+ | holder spring (+) | SS14 #1 anode | keep lead < 40 mm |
+| CELL_INT− | holder spring (−) | GND_STAR | |
+| EXT+ | JST pin 1 | SS14 #2 anode | **1S only, 3.0–4.2 V** |
+| EXT− | JST pin 2 | GND_STAR | |
+| OR_OUT | SS14 #1 cathode + SS14 #2 cathode | FUSE in | joined cathodes = OR node |
+| FUSED | FUSE out | SW1 (SS12D06) pole | |
+| BAT_SW | SW1 throw | MT3608 IN+, TP4056 OUT+* , divider top | *see 1.3 |
+| RAIL_3V3 | MT3608 OUT+ → L1 → C_out | ESP32 3V3, Ra-02 VCC, OLED VCC, GNSS VCC | single rail |
+| GND_STAR | all grounds | single star point at MT3608 GND pad | avoid daisy-chained ground loops |
+
+### 1.2 ORing behaviour
+
+- Higher source voltage forward-biases its diode and feeds the load; the lower source's diode is reverse-biased. No equalisation current between packs.
+- Transfer on plug/unplug is seamless (< 1 ms, held by bulk capacitance). Node does not reboot.
+- Forward drop ≈ 0.25–0.35 V at 100–300 mA (SS14). Budget it: at cell 3.2 V the converter sees ≈ 2.9 V. MT3608 starts from 2 V, fine.
+- Reverse leakage of SS14 at 25 °C ≈ 20–100 µA max per diode; at 60 °C it grows several-fold. This is why SS34-class (0.5 mA class leakage) is rejected for the battery path.
+
+### 1.3 Charger isolation
+
+TP4056 B+/B− connect **directly across the internal holder**, i.e. *before* SS14 #1. Consequences:
+
+- USB charging charges only the internal cell. Correct: TP4056 has no balancing and no knowledge of external pack capacity.
+- External pack can never back-feed the charger (SS14 #2 blocks toward OR node; charger is on the other side of SS14 #1).
+- With USB plugged and external pack connected, the node runs from whichever source is higher after the diodes; charging proceeds independently. No conflict.
+- **Do not** move TP4056 after the ORing node. That would put charger output onto both packs through diodes and defeat isolation.
+
+### 1.4 Boost stage and filtering
+
+```
+MT3608 OUT+ ──[L1 10µH ≥0.5A]──┬── RAIL_3V3
+                               │
+                          [C1 22µF X7R]
+                          [C2 100nF X7R]
+                          [C3 470µF low-ESR]
+                               │
+                              GND
+```
+
+- Trim MT3608 to **3.30 ± 0.05 V** *before* attaching loads. Verify under ~100 mA load.
+- L1 + C1 form the ripple filter (PFM pulse-skipping at light load is the noise source). C2 handles HF edges; C3 holds TX bursts and hot-swap transients.
+- Place C1/C2 within 10 mm of Ra-02 VCC pin; C3 near ESP32 3V3 pin.
+- **No dummy load.** Earlier drafts proposed 330 Ω bleed to force CCM. Rejected: 10 mA permanent = ~240 mAh/day ≈ 25 % of a 3000 mAh cell daily. Ripple is instead handled here (hardware) and by ADC oversampling (firmware).
+- MT3608 is **boost-only**. Input above ~3.3 V passes toward the rail minus internal drops. Hence the 1S-only rule on both sources. There is no overvoltage crowbar on V1.2; discipline is the protection. (V2.0 candidate: buck-boost PMIC.)
+
+### 1.5 DevKit feeding
+
+- Feed the rail into the DevKit **3V3 pin**, never VIN, when running on battery. Onboard AMS1117 dropout ≈ 1.1 V; at 3.3 V in it outputs ~2.2 V → brownout.
+- USB flashing: battery switch OFF, USB supplies VIN → onboard LDO → 3V3 pin normally. The external rail is disconnected by SW1, so no back-feed into MT3608 output (which is non-synchronous and tolerant anyway, but keep the switch off as habit).
+- The onboard USB-UART remains powered whenever the rail is live: expect 1–3 mA overhead. Accepted trade-off for tool-less flashing. Bare-module variant is V2.0.
+
+### 1.6 Battery sense
+
+```
+BAT_SW ──[R1 100k]──┬── GPIO35
+                    │
+                 [R2 100k] [C4 100nF]
+                    │        │
+                   GND ──────GND
+```
+
+- Divider current @ 4.2 V ≈ 21 µA. ADC sees 2.10 V max — inside linear region.
+- Multiplier 2.0 matches stock variant; no calibration needed. If readings drift, trim `config.power.adc_multiplier_override` from the app.
+- C4 at the pin + `BATTERY_SENSE_SAMPLES 64` in firmware = ripple immunity without bleed resistors.
+- Sense point is **after** ORing and fuse, **before** switch: with switch OFF the divider still reads pack voltage (useful for storage checks); divider drain 21 µA is acceptable. If you want zero storage drain, move divider top to BAT_SW (after switch) instead.
+
+---
+
+## 2. Module-by-module wiring
+
+### 2.1 Ra-02 (SX1278), full-pin breakout
+
+| Ra-02 | ESP32 | Wire colour suggestion |
+|---|---|---|
+| SCK | 5 | yellow |
+| MISO | 19 | green |
+| MOSI | 27 | blue |
+| NSS | 18 | white |
+| RST | 23 | orange |
+| DIO0 | 26 | purple |
+| DIO1 | 33 | grey |
+| DIO2 | 32 | spare (optional) |
+| VCC | RAIL_3V3 | red |
+| GND | GND_STAR | black |
+
+- Keep SPI leads < 60 mm, twisted with a ground return where possible.
+- DIO1 mandatory. 8-pin breakouts lacking DIO1 are incompatible with interrupt-driven RX.
+- Antenna: IPEX pigtail → RP-SMA whip. Anchor the pigtail connector at board edge with a hot-glue cone so mating torque never reaches the U.FL pad. **Antenna on before TX, always.** Do not cut whip elements blindly; internal loading coils exist. Verify SWR if you modify.
+
+### 2.2 OLED SH1106 1.3"
+
+| OLED | ESP32 |
+|---|---|
+| SDA | 21 |
+| SCL | 22 |
+| VCC | RAIL_3V3 |
+| GND | GND_STAR |
+
+Address 0x3C. No reset line. Do not power-gate the display: Meshtastic probes I²C at boot and skips screen creation if absent.
+
+### 2.3 ATGM336H GNSS
+
+| GNSS | ESP32 / rail |
+|---|---|
+| TX | 13 (ESP32 RX) |
+| RX | 14 (ESP32 TX) |
+| VCC | RAIL_3V3 (subject to 2.4 test) |
+| GND | GND_STAR |
+| PPS | test pad only |
+
+#### 2.4 LDO dropout verification (mandatory before fixing rail voltage)
+
+The breakout is sold as "5 V" because of an onboard LDO; the AT6558 die is a 3.3 V part. Procedure:
+
+1. Bench-feed VCC = 5.00 V. Confirm NMEA at 9600 baud, current 20–30 mA.
+2. Black probe on GND pad. Probe the MLCC terminals around the shield can; the stable ≈ 3.3 V node is the die rail (LDO output). Mark it.
+3. Drop input to 3.30 V. Re-measure marked node:
+   - **≥ 3.0 V** → keep rail 3.30 V. Add 10 µF tantalum at module VCC/GND for cold-start peaks.
+   - **2.8–3.0 V** → trim rail to 3.40–3.45 V (safe: ESP32 ≤ 3.6 V, SX1278 ≤ 3.6 V, SH1106 module tolerant). Re-verify.
+   - **< 2.8 V** → high-dropout LDO fitted. Either jumper VCC pad → LDO output (bypass; acceptable because the whole node shares one regulated rail — an overvoltage event kills everything anyway, so the LDO adds no system-level protection), or substitute a 3.3 V-native GNSS.
+4. Cold-start soak: unpowered 30 min, then power at chosen rail; fix within 30–60 s, no current sawtooth (reset loop).
+5. If a fix-indicator LED is populated on the breakout and lights on fix, remove it for battery builds (2–3 mA).
+
+### 2.5 USER button
+
+GPIO39 → tactile switch → GND. External 10 kΩ from GPIO39 to RAIL_3V3. No internal pull exists on 34–39. Debounce in firmware.
+
+### 2.6 External input connector
+
+- JST-PH 2.0, 2-pin, board-mount female on bottom layer edge.
+- Pin 1 = +, Pin 2 = −. **Mark polarity on the board silkscreen/paint and on every pack.** JST-PH has no universal polarity convention; your own convention is law.
+- Packs: 1S only (single 18650 in wired holder, 1S LiPo, parallel 1S blocks of any capacity). Parallel 1S blocks are safe to combine *inside the pack* (same chemistry, matched cells, fused); never parallel at different SoC through the node without the ORing diodes.
+- XT30 deliberately not fitted: current rating irrelevant at 0.3 A peaks, and its drone-pack ecosystem invites 2S+ insertion which destroys the boost-only rail.
+
+---
+
+## 3. Mechanical stack-up (60 × 80 mm)
+
+### 3.1 Bottom layer layout
+
+```
+┌────────────────────────────────────────────┐
+│ [MT3608 + L1/C1/C2/C3]          [JST EXT+] │
+│        ╲                                   │
+│         ╲                                  │
+│          ╲   18650 holder, diagonal        │
+│           ╲  (corner → corner)             │
+│            ╲                               │
+│             ╲                              │
+│              ╲                             │
+│               ╲                            │
+│                ╲                           │
+│                 ╲                          │
+│                  ╲                         │
+│                   ╲                        │
+│                    ╲                       │
+│                     ╲                      │
+│                      ╲                     │
+│                       ╲                    │
+│                        ╲                   │
+│                         ╲                  │
+│                          ╲                 │
+│                           ╲                │
+│                            ╲               │
+│                             ╲              │
+│                              ╲             │
+│                               ╲            │
+│                                ╲           │
+│                                 ╲          │
+│                                  ╲         │
+│                                   ╲        │
+│                                    ╲       │
+│                                     ╲      │
+│                                      ╲     │
+│                                       ╲    │
+│                                        ╲   │
+│                                         ╲  │
+│                                          ╲ │
+│ [TP4056 + SS14#1 + SS14#2 + FUSE + SW1]    │
+└────────────────────────────────────────────┘
+```
+
+- Diagonal = 100 mm; holder + cell ≈ 78 mm → contacts land near opposite corners, adjacent to charger and converter respectively. Short power leads.
+- Cell retention: hook-and-loop strap across cell + board, or two hot-glue dabs at holder ends. Never glue contacts.
+- Underside insulation for open-frame use: kapton/cardboard sheet or four rubber feet. Conductive debris under the board is the #1 killer of open prototypes.
+
+### 3.2 Middle layer
+
+ESP32 DevKit on female headers (male pins on bottom layer or direct soldered standoffs — choose one convention and keep it). USER button at edge. Keep DevKit USB port accessible from the side for flashing without disassembly.
+
+### 3.3 Top layer
+
+Ra-02 left, GNSS right, OLED centre-front, pigtail anchor at rear edge. GPS patch faces up, ≥ 15 mm from Ra-02 shield can. Nothing metallic above the patch.
+
+### 3.4 Standoffs
+
+M2 × 20 between L1–L2 (cell clearance 18 mm + margin), M2 × 15 between L2–L3. Nylon preferred near antenna; brass acceptable elsewhere. Do not overtighten into perfboard — crack risk; use nuts + washers.
+
+---
+
+## 4. Test points
+
+| TP | Net | Expected |
+|---|---|---|
+| TP1 | OR_OUT | max(Vint, Vext) − 0.3 V |
+| TP2 | BAT_SW | TP1 when SW1 ON, 0 V when OFF |
+| TP3 | RAIL_3V3 | 3.30 ± 0.05 V, ripple < 30 mV pp under load |
+| TP4 | GPIO35 | Vpack / 2, ≤ 2.1 V |
+| TP5 | GNSS die rail | per 2.4 table |
+| TP6 | GND_STAR | 0 V reference for all measurements |
+
+Measure ripple with AC coupling, 20 MHz BW limit, short ground spring — not the 15 cm alligator lead.
+
+---
+
+## 5. Bring-up sequence
+
+1. Visual: polarity of SS14 #1/#2 (band = cathode toward fuse), TP4056 protection ICs present, fuse seated.
+2. MT3608 standalone trim to 3.30 V, load test 100 mA.
+3. Power rail only (no modules): verify TP3, ripple, quiescent current (expect 1–3 mA, dominated by converter + UART if DevKit fitted later).
+4. Fit ESP32, flash via USB with SW1 OFF. Verify boot log.
+5. Fit Ra-02 **with antenna**. Verify `RF95 init result 0`.
+6. Fit OLED. Verify SH1106 at 0x3C.
+7. GNSS dropout test (2.4), then fit. Verify NMEA/fix.
+8. Battery sense sanity: compare TP4 × 2 against multimeter at pack; adjust override if > 0.1 V off.
+9. Hot-swap: internal running → plug charged external → no reboot, TP1 rises; unplug → no reboot, TP1 falls to internal. Repeat 5×.
+10. Sleep current: screen off, BLE off, power saving on, measure at TP2 shunt or series ammeter. Expect single-digit mA on DevKit build. Log it; this number is your real autonomy baseline.
+11. Range sanity: two nodes, LONG_FAST, known distance, log RSSI/SNR. Compare against stock T-LoRa if available.
+
+---
+
+## 6. Failure modes & mitigations
+
+| Failure | Cause | Mitigation in V1.2 |
+|---|---|---|
+| Rail overvoltage, all ICs dead | 2S+ pack or 5 V bank into boost-only input | 1S-only rule, labelled packs, JST (not XT30). No electronic OVP on V1.2 — discipline required. V2.0: buck-boost + OVP. |
+| Equalisation fire between packs | ORing diodes omitted | SS14 #1/#2 mandatory, verified at bring-up step 1 |
+| Reverse pack destroys converter | JST polarity confusion | paint-marked convention + SS14 blocks reverse current from reaching rail (diode reverse-biased; pack sees open circuit) |
+| Short under open frame | conductive debris | underside insulation / feet |
+| PA degradation | TX without antenna | procedural rule + pigtail strain relief so antenna stays attached |
+| GPS resets at cold start | LDO dropout marginal | 2.4 test + tantalum at module + rail trim option |
+| Deep sleep never reached | DevKit UART overhead | accepted limitation; measure and document; bare module in V2.0 |
+| Battery % lies | voltage-only estimation | ±10–15 % accepted; override trim; coulomb counter is V2.0 |
+
+---
+
+## 7. V1.2 delta summary (for maintainers)
+
+- Boards 60 × 80 mm (reverted from 50 × 70 experiment).
+- Internal SMD holder retained, diagonal mount.
+- External JST-PH 1S input added.
+- SS14 ×2 ORing, 1 A fuse, SS12D06 retained.
+- Dummy-load bleed removed (was a autonomy bug).
+- ORing diode class changed SS34 → SS14 (leakage).
+- GNSS LDO verification made mandatory; rail trim window 3.30–3.45 V documented.
+- BOM.csv deleted; parts table moved to README.
+- Firmware variant unchanged electrically; no pin changes; `PRIVATE_HW` build as before.
